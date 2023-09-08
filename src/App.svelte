@@ -1,47 +1,65 @@
 <script lang="ts">
-  import svelteLogo from './assets/svelte.svg'
-  import viteLogo from '/vite.svg'
-  import Counter from './lib/Counter.svelte'
+  import { onMount } from "svelte";
+  import { TezosToolkit } from "@taquito/taquito";
+  import store from "./store";
+  import { rpcUrl, dexAddress } from "./config";
+  import Sidebar from "./lib/Sidebar.svelte";
+  import Interface from "./lib/Interface.svelte";
+  import Toast from "./lib/Toast.svelte";
+  import type { Storage } from "./types";
+  import { fetchExchangeRates } from "./utils";
+
+  onMount(async () => {
+    const Tezos = new TezosToolkit(rpcUrl);
+    store.updateTezos(Tezos);
+    const contract = await Tezos.wallet.at(dexAddress);
+    const storage: Storage | undefined = await contract.storage();
+
+    if (storage) {
+      store.updateDexInfo({ ...storage });
+    }
+
+    // fetches XTZ and tzBTC prices
+    const res = await fetchExchangeRates();
+    if (res) {
+      store.updateExchangeRates([
+        { token: "XTZ", exchangeRate: res.xtzPrice },
+        { token: "tzBTC", exchangeRate: res.tzbtcPrice },
+      ]);
+    } else {
+      store.updateExchangeRates([
+        { token: "XTZ", exchangeRate: null },
+        { token: "tzBTC", exchangeRate: null },
+      ]);
+    }
+  });
 </script>
 
 <main>
-  <div>
-    <a href="https://vitejs.dev" target="_blank" rel="noreferrer">
-      <img src={viteLogo} class="logo" alt="Vite Logo" />
-    </a>
-    <a href="https://svelte.dev" target="_blank" rel="noreferrer">
-      <img src={svelteLogo} class="logo svelte" alt="Svelte Logo" />
-    </a>
-  </div>
-  <h1>Vite + Svelte</h1>
-
-  <div class="card">
-    <Counter />
-  </div>
-
-  <p>
-    Check out <a href="https://github.com/sveltejs/kit#readme" target="_blank" rel="noreferrer">SvelteKit</a>, the official Svelte app framework powered by Vite!
-  </p>
-
-  <p class="read-the-docs">
-    Click on the Vite and Svelte logos to learn more
-  </p>
+  <Toast />
+  {#if $store.Tezos && $store.dexInfo}
+    <Sidebar />
+    <Interface />
+  {:else}
+    <div>Loading</div>
+  {/if}
 </main>
 
 <style>
-  .logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: filter 300ms;
+  @import "./styles/settings.scss";
+
+  main {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: $padding;
+    padding: $padding;
+    height: calc(100% - (#{$padding} * 2));
   }
-  .logo:hover {
-    filter: drop-shadow(0 0 2em #646cffaa);
-  }
-  .logo.svelte:hover {
-    filter: drop-shadow(0 0 2em #ff3e00aa);
-  }
-  .read-the-docs {
-    color: #888;
+
+  @media screen and (max-height: 700px) {
+    main {
+      padding: 0px;
+      height: 100%;
+    }
   }
 </style>
